@@ -2,8 +2,8 @@
 import logging
 import matplotlib.pyplot as plt
 import re
-
-
+import os
+import textwrap
 from kuibit import argparse_helper as kah
 from kuibit.simdir import SimDir
 from kuibit.hor_utils import compute_separation
@@ -24,11 +24,27 @@ config = {
     'detector_num': 0,
     "ah": [1,2],
     "sep_ah": [1,2],
-    "ah_plane": 'xy'
+    "ah_plane": 'yz',
+    "output_dir": "."
 }
 
 
 logs = []
+
+
+report_body = ""
+
+def gen_fig(fig):
+    global report_body
+    plt.savefig(f"{config['output_dir']}/{fig}.png")
+    plt.savefig(f"{config['output_dir']}/{fig}.pdf")
+    report_body += textwrap.dedent(f"""
+<p>
+<a href="{config['output_dir']}/{fig}.pdf"><img src="{fig}.png"/>
+        </a>
+        <br/>{fig}</p>
+    """)
+
 def getTerminationReason(logfile):
     with open(logfile, "r") as fh:
         for line in fh.readlines():
@@ -84,7 +100,7 @@ def populate_graphs(sim):
 
     set_axis_limits_from_args(args)
     logger.debug("Plotted Psi_4")
-    plt.savefig("psi_4.png")
+    gen_fig("psi_4")
     plt.clf()
 
 
@@ -177,7 +193,7 @@ def populate_graphs(sim):
     add_text_to_corner(rf"$t = {time:.3f}$")
 
     logger.debug("Saving horizons.png")
-    plt.savefig("horizons.png")
+    gen_fig("horizons")
     plt.clf()
 
     logger.debug("Plotting separation")
@@ -193,7 +209,7 @@ def populate_graphs(sim):
     logger.debug("Plotted")
 
     logger.debug("Saving")
-    plt.savefig('sep_ah.png')
+    gen_fig('sep_ah')
     plt.clf()
 
     logger.debug('Plotting norm_inf H')
@@ -207,7 +223,7 @@ def populate_graphs(sim):
     logger.debug("Plotted")
 
     logger.debug("Saving")
-    plt.savefig('norm_inf_H.png')
+    gen_fig('norm_inf_H')
     logger.debug("DONE")
 
 if __name__ == "__main__":
@@ -236,5 +252,16 @@ if __name__ == "__main__":
     ) as sim:
         populate_logs(sim)
         populate_graphs(sim)
-
+    logger.debug("Generating HTML")
+    report_file = open(f"{config['output_dir']}/index.html", 'w')
+    sim = os.path.normpath(args.datadir)
+    report_file.write(textwrap.dedent(f"""
+    <html>
+    <head>
+        <title> {sim} overview</title>
+    </head>
+    <body>
+    <h1> {sim} overview </h1>
+    {report_body}
+    """))
     logger.debug("DONE")
