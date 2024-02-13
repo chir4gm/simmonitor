@@ -2,6 +2,7 @@
 import logging
 import matplotlib.pyplot as plt
 import bokeh.plotting as bkh_plt
+import code
 import bokeh
 import re
 import os
@@ -37,24 +38,24 @@ bkh_plt.output_file("interactive.html")
 bkh_doc = []
 report_body = ""
 def gen_fig(fig):
+    logger.debug(f"Generating Figure {fig}")
     global report_body
     global bkh_figs
     ax = plt.gca()
     lines = ax.get_lines()
     x_data = [i.get_xdata() for i in lines]
     y_data = [i.get_ydata() for i in lines]
-    logger.debug(f"Generating Figure {fig}")
-    logger.debug(f"{x_data}")
-    logger.debug(f"{y_data}")
-    bkh_figs = bkh_plt.figure(width=500, height=500,title=fig)
+    bkh_fig = bkh_plt.figure(width=500, height=500,title=fig,
+                              toolbar_location = 'left')
+    bkh_fig.toolbar.logo = None
     for i in range(len(lines)):
-        bkh_figs.line(
+        bkh_fig.line(
             x_data[i],
             y_data[i],
             line_color = bokeh.palettes.Category10_10[i % 10],
             line_width=2
         )
-    bkh_doc.append(bkh_figs)
+    bkh_doc.append(bkh_fig)
     plt.savefig(f"{config['output_dir']}/{fig}.png")
     plt.savefig(f"{config['output_dir']}/{fig}.pdf")
     report_body += textwrap.dedent(f"""
@@ -81,7 +82,6 @@ def populate_logs(sim):
     for i in sim_logs:
         sim_num = re.search(r"output-(\d\d\d\d)", i).group(1)
         logs.append([f'{sim_num}{"(active)" if ("active" in i) else "" }', getTerminationReason(i), i])
-    logger.debug('DONE')
         
 
 def populate_graphs(sim):
@@ -89,39 +89,41 @@ def populate_graphs(sim):
 
     reader = sim.gravitationalwaves
 
-    radius = config["radius"]
-    logger.debug(f"Using radius: {radius}")
+#    radius = config["radius"]
+#    logger.debug(f"Using radius: {radius}")
+
+#   Plotting all detectors
+
     logger.debug(f"Radii Available: {reader.radii}")
-    detector = reader[radius]
+    for radius in reader.radii:
+        detector = reader[radius] 
 
 
-    psi4 = detector[config['l'], config['m']]
-    logger.debug("Plotting Psi4")
+        psi4 = detector[config['l'], config['m']]
+        logger.debug(f"Plotting Psi4 radius={radius}")
 
-    plt.plot(
-        radius * psi4.real(),
-        label=rf"$r\Re\Psi_4^{{{config['l']}{config['m']}}}$"
-    )
-    plt.plot(
-        radius * psi4.abs(),
-        label=rf"$r|\Psi_4^{{{config['l']}{config['m']}}}|$"
-    )
-    logger.debug(f"Creating Bokeh Plot")
-    logger.debug(f"{radius*psi4.real().to_numpy()}")
+        plt.plot(
+            radius * psi4.real(),
+            label=rf"$r\Re\Psi_4^{{{config['l']}{config['m']}}}$"
+        )
+        plt.plot(
+            radius * psi4.abs(),
+            label=rf"$r|\Psi_4^{{{config['l']}{config['m']}}}|$"
+        )
 
-    plt.legend()
-    plt.xlabel("Time")
-    plt.ylabel(r"$r \Psi_4$")
+        plt.legend()
+        plt.xlabel("Time")
+        plt.ylabel(r"$r \Psi_4$")
 
-    add_text_to_corner(
-        f"Det {config['detector_num']}", anchor="SW", offset=0.005
-    )
-    add_text_to_corner(rf"$r = {radius:.3f}$", anchor="NE", offset=0.005)
+        add_text_to_corner(
+            f"Det {config['detector_num']}", anchor="SW", offset=0.005
+        )
+        add_text_to_corner(rf"$r = {radius:.3f}$", anchor="NE", offset=0.005)
 
-    set_axis_limits_from_args(args)
-    logger.debug("Plotted Psi_4")
-    gen_fig("psi_4")
-    plt.clf()
+        set_axis_limits_from_args(args)
+        logger.debug("Plotted Psi_4")
+        gen_fig(f"psi_4_r_{radius}")
+        plt.clf()
 
 
     logger.debug(
@@ -243,12 +245,12 @@ def populate_graphs(sim):
 
     logger.debug("Saving")
     gen_fig('norm_inf_H')
-    logger.debug("DONE")
 
 if __name__ == "__main__":
     desc = f"""{kah.get_program_name()} generates a simulation report"""
 
     parser = kah.init_argparse(desc)
+    parser.add_argument('--dark', action='store_true')
     kah.add_figure_to_parser(parser, add_limits=True)
     kah.add_horizon_to_parser(parser)
     args = kah.get_args(parser)
@@ -263,7 +265,6 @@ if __name__ == "__main__":
     if args.verbose:
         logging.basicConfig(format="%(asctime)s - %(message)s")
         logger.setLevel(logging.DEBUG)
-
     with SimDir(
         args.datadir,
         ignore_symlinks=args.ignore_symlinks,
@@ -285,5 +286,11 @@ if __name__ == "__main__":
     """))
 
     doc = bokeh.layouts.column(*bkh_doc)
-    bkh_plt.save(doc)
+
+    if (args.dark):
+        bkh_plt.curdoc().theme = 'dark_minimal'
+    else:
+        bkh_plt.curdoc().theme = 'light_minimal'
+
+    bkh_plt.save(doc, title="Simmonitor")
     logger.debug("DONE")
