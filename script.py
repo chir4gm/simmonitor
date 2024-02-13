@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 import logging
 import matplotlib.pyplot as plt
+import bokeh.plotting as bkh_plt
+import bokeh
 import re
 import os
 import textwrap
@@ -31,11 +33,28 @@ config = {
 
 logs = []
 
-
+bkh_plt.output_file("interactive.html")
+bkh_doc = []
 report_body = ""
-
 def gen_fig(fig):
     global report_body
+    global bkh_figs
+    ax = plt.gca()
+    lines = ax.get_lines()
+    x_data = [i.get_xdata() for i in lines]
+    y_data = [i.get_ydata() for i in lines]
+    logger.debug(f"Generating Figure {fig}")
+    logger.debug(f"{x_data}")
+    logger.debug(f"{y_data}")
+    bkh_figs = bkh_plt.figure(width=500, height=500,title=fig)
+    for i in range(len(lines)):
+        bkh_figs.line(
+            x_data[i],
+            y_data[i],
+            line_color = bokeh.palettes.Category10_10[i % 10],
+            line_width=2
+        )
+    bkh_doc.append(bkh_figs)
     plt.savefig(f"{config['output_dir']}/{fig}.png")
     plt.savefig(f"{config['output_dir']}/{fig}.pdf")
     report_body += textwrap.dedent(f"""
@@ -77,7 +96,6 @@ def populate_graphs(sim):
 
 
     psi4 = detector[config['l'], config['m']]
-
     logger.debug("Plotting Psi4")
 
     plt.plot(
@@ -86,9 +104,11 @@ def populate_graphs(sim):
     )
     plt.plot(
         radius * psi4.abs(),
-        label=rf"$r\Re\Psi_4^{{{config['l']}{config['m']}}}$"
+        label=rf"$r|\Psi_4^{{{config['l']}{config['m']}}}|$"
     )
-    
+    logger.debug(f"Creating Bokeh Plot")
+    logger.debug(f"{radius*psi4.real().to_numpy()}")
+
     plt.legend()
     plt.xlabel("Time")
     plt.ylabel(r"$r \Psi_4$")
@@ -174,9 +194,8 @@ def populate_graphs(sim):
         plt.plot(
             ah_coords[to_plot_x][ind].y,
             ah_coords[to_plot_y][ind].y,
-            label=f"Horizon {ah}",
+            label=f"Horizon {ah}"
         )
-
         # We save the time to plot the horizon outline
         time = ah_coords[to_plot_x][ind].tmax
 
@@ -264,4 +283,7 @@ if __name__ == "__main__":
     <h1> {sim} overview </h1>
     {report_body}
     """))
+
+    doc = bokeh.layouts.column(*bkh_doc)
+    bkh_plt.save(doc)
     logger.debug("DONE")
