@@ -1,16 +1,7 @@
-# TODO:
-# Downgrade python requirements
-# Add missing graphs
-# Add radius tabs
-# Add a simulation reporting option
-# Diagnose why certain simulations aren't working
-# Add 3d vector visualisations
-#! /usr/bin/python3
+#!/usr/bin/python3
+import numpy as np
 import logging
 import matplotlib.pyplot as plt
-import bokeh.plotting as bkh_plt
-import code
-import bokeh
 import re
 import os
 import textwrap
@@ -28,44 +19,15 @@ from kuibit.visualize_matplotlib import (
 )
 from kuibit.series import sample_common
 
-args = None
-logs = []
-
-bkh_doc = []
-report_body = ""
-
-
 def gen_fig(fig):
     logger.debug(f"Generating Figure {fig}")
-    global report_body
-    global bkh_figs
     ax = plt.gca()
     lines = ax.get_lines()
     x_data = [i.get_xdata() for i in lines]
     y_data = [i.get_ydata() for i in lines]
-    bkh_fig = bkh_plt.figure(title=fig, toolbar_location="left")
-
-    bkh_fig.min_border_left = 0
-    bkh_fig.min_border_right = 0
-    bkh_fig.min_border_top = 0
-    bkh_fig.min_border_bottom = 0
-    bkh_fig.toolbar.logo = None
-    bkh_fig.toolbar.active_drag = None
-    bkh_fig.toolbar.active_scroll = None
-    bkh_fig.toolbar.active_tap = None
-
-    for i in range(len(lines)):
-        bkh_fig.line(
-            x_data[i],
-            y_data[i],
-            line_color=bokeh.palettes.Category10_10[i % 10],
-            line_width=2,
-        )
-
-    bkh_doc.append(bkh_fig)
     plt.savefig(f"{args.outdir}/{fig}.png")
     plt.savefig(f"{args.outdir}/{fig}.pdf")
-    report_body += textwrap.dedent(
+    return textwrap.dedent(
         f"""
         <p>{fig}<br/><a href="{args.outdir}/{fig}.pdf"><img src="{fig}.png"/></a></p>
     """
@@ -97,26 +59,28 @@ def populate_logs(sim):
     logger.debug("Populating Logs")
     sim_logs = sim.logfiles
     sim_logs.sort()
+    logs = []
     for i in sim_logs:
         sim_num = re.search(r"output-(\d\d\d\d)", i).group(1)
         logs.append(
             [
                 f'{sim_num}{"(active)" if ("active" in i) else "" }',
                 getTerminationReason(i),
-                i,
+                os.path.abspath(i),
             ]
         )
+    logs = [f"<tr><td><a href='{log[2]}'>{log[0]}</a></td><td>{log[1]}</td></tr>" for log in logs]
+    logs = ["<tr><th>Simulation Run</th><th>Termination Reason</th></tr>"] + logs
 
+    return logs
 
-def populate_graphs(sim):
-    global args
+def populate_graphs(sim, args):
     logger.debug("Prepared SimDir")
-
     reader = sim.gravitationalwaves
-
-    #    radius = args.radius
-    #    logger.debug(f"Using radius: {radius}")
     logger.debug(f"Radii available: {reader.radii}")
+
+    plotly_html = []
+    static_html = []
     sim_radii = None
     if args.radius:
         logger.debug(f"Plotting radii: {args.radius}")
@@ -143,8 +107,9 @@ def populate_graphs(sim):
 
         set_axis_limits_from_args(args)
         logger.debug("Plotted Psi_4")
-        gen_fig(f"psi_4_r_{radius}")
+        static_html.append(gen_fig(f"psi_4_r_{radius}"))
         plt.clf()
+
 
     logger.debug(
         f"Apparent horizons available: {sim.horizons.available_apparent_horizons}"
@@ -202,6 +167,7 @@ def populate_graphs(sim):
     logger.debug(f"Plotting on the x axis {to_plot_x}")
     logger.debug(f"Plotting on the y axis {to_plot_y}")
 
+    time = None
     # Now we loop over all the horizons
     for ind, ah in enumerate(args.ah):
         plt.plot(
@@ -209,6 +175,7 @@ def populate_graphs(sim):
             ah_coords[to_plot_y][ind].y,
             label=f"Horizon {ah}",
         )
+        logger.debug(len(ah_coords[to_plot_x][ind].y))
         # We save the time to plot the horizon outline
         time = ah_coords[to_plot_x][ind].tmax
 
@@ -219,64 +186,68 @@ def populate_graphs(sim):
 
     plt.gca().set_aspect("equal")
 
-    plt.legend()
+    plt.legend() 
     add_text_to_corner(rf"$t = {time:.3f}$")
-
     logger.debug("Saving horizons.png")
-    gen_fig("horizons")
+    static_html.append(gen_fig("horizons"))
     plt.clf()
+
 
     logger.debug("Plotting separation")
     h1 = sim.horizons.get_apparent_horizon(args.sep_ah[0])
     h2 = sim.horizons.get_apparent_horizon(args.sep_ah[1])
 
     separation = compute_separation(h1, h2, resample=True)
-
     plt.plot(separation)
     plt.ylabel("Coordinate separation")
     plt.xlabel("Time")
     set_axis_limits_from_args(args)
+    static_html.append(gen_fig("sep_ah"))
+    plt.clf()
     logger.debug("Plotted")
 
-    logger.debug("Saving")
-    gen_fig("sep_ah")
-    plt.clf()
-
-    reader = sim.timeseries["infnorm"]
-    if not len(reader.keys()):
-        reader = AllScalars(sim.allfiles, "norm_inf")
     
     logger.debug("Plotting norm_inf H")
+
+    reader = sim.timeseries["infnorm"]
+    # infnorm can be norm_inf in some simulations
+    if not len(reader.keys()):
+        reader = AllScalars(sim.allfiles, "norm_inf")
+    # Remove some data from the beginning to only see fluctuations more clearly
     var = reader["H"].initial_time_removed(10)
-    logger.debug("Plotting timeseries")
+
     plt.plot(var)
     plt.xlabel("Time")
     plt.ylabel(r"$\|H\|_{\infty}$")
     logger.debug("Plotted")
-    gen_fig("norm_inf_H")
+    static_html.append(gen_fig("norm_inf_H"))
     plt.clf()
+    logger.debug("Plotted")
     logger.debug("Saving")
 
     logger.debug("Plotting Simulation Speed")
     var = reader["H"].initial_time_removed(10)
     logger.debug("Plotting timeseries")
+
     plt.plot(sim.ts.scalar['physical_time_per_hour'])
     plt.xlabel("Time")
     plt.ylabel("Simulation Speed [M/hr]")
     logger.debug("Plotted")
-    gen_fig("sim_speed")
+    static_html.append(gen_fig("sim_speed"))
     plt.clf()
-    logger.debug("Saving")
+    logger.debug("Plotted")
+    return plotly_html,static_html
 
 
 if __name__ == "__main__":
-    desc = f"""{kah.get_program_name()} generates a simulation report"""
+    desc = f"""{kah.get_program_name()} generates a reports for Einstein Toolkit Simulation. It can generate static versions using Matplotlib and HTML"""
 
     parser = kah.init_argparse(desc)
-    parser.add_argument("--dark", action="store_true")
+
+    #parser.add_argument("--theme", type=str, default="plotly", choices=list(pio.templates.keys()), help=f"Choose a theme from:{list(pio.templates.keys())}")
     parser.add_argument("--l", "-l", type=int)
     parser.add_argument("--m", "-m", type=int)
-    parser.add_argument("--radius", "-r", type=int, action="append")
+    parser.add_argument("--radius", "-r", type=float, action="append")
     parser.add_argument("--info", "-i", action="store_true", help="Retrieve Kuibit simulation metadata")
     parser.add_argument("--detector_num", type=int)
     parser.add_argument("--ah", type=int, action="append", help="Active Horizons")
@@ -284,21 +255,23 @@ if __name__ == "__main__":
         "--sep_ah", type=int, action="append", help="Separated Active Horizons"
     )
     parser.add_argument("--ah_plane", type=str, help="Active Horizon Plane")
+
     args = kah.get_args(parser)
     args.xmin = None
     args.xmax = None
     args.ymin = None
     args.ymax = None
 
+
     setup_matplotlib(
         {"text.usetex": True, "text.latex.preamble": r"\usepackage{amsmath}"}
     )
-    logger = logging.getLogger(__name__)
 
+    logger = logging.getLogger(__name__)
     if args.verbose:
         logging.basicConfig(format="%(asctime)s - %(message)s")
         logger.setLevel(logging.DEBUG)
-    bkh_plt.output_file(f"{args.outdir}/interactive.html")
+
 
     with SimDir(
         args.datadir,
@@ -310,37 +283,27 @@ if __name__ == "__main__":
             for i in sim.ts.keys():
                 print(i)
             quit() 
-        populate_logs(sim)
-        populate_graphs(sim)
-    logger.debug("Generating HTML")
-    report_file = open(f"{args.outdir}/index.html", "w")
-    sim = os.path.normpath(args.datadir)
-    report_file.write(
-        textwrap.dedent(
-            f"""
-    <html>
-    <head>
-        <title> {sim} overview</title>
-    </head>
-    <body>
-    <h1> {sim} overview </h1>
-    {report_body}
-    """
+
+        logs = populate_logs(sim)
+        plotly_html, static_html =  populate_graphs(sim, args)
+
+        logger.debug("Generating Static HTML")
+        report_file = open(f"{args.outdir}/index.html", "w")
+        sim = os.path.normpath(args.datadir)
+        report_file.write(
+            textwrap.dedent(
+        f"""
+        <html>
+        <head>
+            <title> {sim} overview</title>
+        </head>
+        <body>
+        <h1> {sim} overview </h1>
+        <table>
+        {''.join(logs)}
+        </table>
+        {''.join(static_html)}
+        </body>
+        """
         )
-    )
-
-    doc = bokeh.layouts.column(
-        *bkh_doc,
-        sizing_mode="scale_both",
-        resizable=True,
-        spacing=10,
-        styles={"display": "block", "margin": "auto", "width": "60%"},
-    )
-
-    if args.dark:
-        bkh_plt.curdoc().theme = "dark_minimal"
-    else:
-        bkh_plt.curdoc().theme = "light_minimal"
-
-    bkh_plt.save(doc, title="Simmonitor")
-    logger.debug("DONE")
+        )

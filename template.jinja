@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiple Plotly Figures</title>
+    <!-- Include Plotly JS -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+    <!-- Include MathJax -->
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@2/MathJax.js?config=TeX-AMS_CHTML"></script>
+
+</head>
+
+<body>
+    <h1>Simmonitor</h1>
+    {% for fig in plotly_html %}
+        <div id="plot-container">
+            {{ fig | safe }}
+        </div>
+    {% endfor %}
+</body>
+</html>
