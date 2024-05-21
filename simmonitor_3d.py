@@ -53,13 +53,13 @@ def populate_logs(sim):
     sim_logs = sim.logfiles
     sim_logs.sort()
     logs = []
-    for i in sim_logs:
-        sim_num = re.search(r"output-(\d\d\d\d)", i).group(1)
+    for sim_log in sim_logs:
+        sim_num = re.search(r"output-(\d\d\d\d)", sim_log).group(1)
         logs.append(
             [
-                f'{sim_num}{"(active)" if ("active" in i) else "" }',
-                getTerminationReason(i),
-                os.path.abspath(i),
+                f'{sim_num}{"(active)" if ("active" in sim_log) else "" }',
+                getTerminationReason(sim_log),
+                os.path.abspath(sim_log),
             ]
         )
     logs = [f"<tr><td><a href='{log[2]}'>{log[0]}</a></td><td>{log[1]}</td></tr>" for log in logs]
@@ -386,8 +386,8 @@ if __name__ == "__main__":
     ) as sim:
         if (args.info):
             print(sim)
-            for i in sim.ts.keys():
-                print(i)
+            for s in sim.ts.keys():
+                print(s)
             quit() 
 
         logs = populate_logs(sim)
