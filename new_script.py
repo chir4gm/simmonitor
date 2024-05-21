@@ -8,10 +8,11 @@
 # Add 3d vector visualisations
 #! /usr/bin/python3
 import numpy as np
-import IPython
+import plotly.io as pio
+from jinja2 import Template
 import pandas as pd
 import logging
-import plotly.express
+import plotly.io as pio
 import plotly.express as px
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
@@ -104,6 +105,7 @@ def populate_logs(sim):
     logger.debug("Populating Logs")
     sim_logs = sim.logfiles
     sim_logs.sort()
+    logs = []
     for i in sim_logs:
         sim_num = re.search(r"output-(\d\d\d\d)", i).group(1)
         logs.append(
@@ -113,7 +115,8 @@ def populate_logs(sim):
                 i,
             ]
         )
-
+    logs = [f"<tr><td><a href='{log[2]}'>{log[0]}</a></td><td>{log[1]}</td></tr>" for log in logs]
+    logs = ["<tr><th>Simulation Run</th><th>Termination Reason</th></tr>"] + logs
 
 def populate_graphs(sim):
     global args
@@ -265,6 +268,7 @@ def populate_graphs(sim):
     frames = []
     for frame_time in time_bins:
         frame_data = []
+        # Add trajectory line and marker for each horizon
         for label, group in horizons.groupby('label'):
             horizon_frame_data = group[group['time'] <= frame_time]
             frame_data.append(
@@ -300,7 +304,7 @@ def populate_graphs(sim):
                 'label': str(frame.name),
                 'args': [[frame.name], {'frame': {'duration': 300, 'redraw': True}, 'mode': 'immediate', 'transition': {'duration': 300}}]
             } for frame in frames
-        ],
+       ],
         'transition': {'duration': 300},
         'x': 0,
         'y': 0,
@@ -313,6 +317,7 @@ def populate_graphs(sim):
     }]
 
     fig.update_layout(
+        template=pio.templates.default,
         sliders=sliders,
         scene=dict(
             xaxis_title='X',
@@ -320,10 +325,12 @@ def populate_graphs(sim):
             zaxis_title='Z'
         )
     )
-
-    # Show the plot
-    fig.write_html('plotly.html', auto_play=False)
-
+    fig_html = pio.to_html(fig,include_plotlyjs=False, full_html=False, auto_play=False)
+    with open('template.jinja') as template:
+        output = Template(template.read())
+        output = output.render(fig=fig_html)
+    with open('plotly.html', 'w') as o:
+        o.write(output)
     xlabel = f"{to_plot_x} - {to_plot_x}_CM"
     ylabel = f"{to_plot_y} - {to_plot_y}_CM"
     plt.xlabel(xlabel)
@@ -384,10 +391,10 @@ if __name__ == "__main__":
     desc = f"""{kah.get_program_name()} generates a simulation report"""
 
     parser = kah.init_argparse(desc)
-    parser.add_argument("--dark", action="store_true")
+    parser.add_argument("--theme", type=str, default="plotly", choices=list(pio.templates.keys()), help=f"Choose a theme from:{list(pio.templates.keys())}")
     parser.add_argument("--l", "-l", type=int)
     parser.add_argument("--m", "-m", type=int)
-    parser.add_argument("--radius", "-r", type=int, action="append")
+    parser.add_argument("--radius", "-r", type=float, action="append")
     parser.add_argument("--info", "-i", action="store_true", help="Retrieve Kuibit simulation metadata")
     parser.add_argument("--detector_num", type=int)
     parser.add_argument("--ah", type=int, action="append", help="Active Horizons")
@@ -400,6 +407,9 @@ if __name__ == "__main__":
     args.xmax = None
     args.ymin = None
     args.ymax = None
+
+
+    pio.templates.default = args.theme
 
     setup_matplotlib(
         {"text.usetex": True, "text.latex.preamble": r"\usepackage{amsmath}"}
@@ -436,6 +446,7 @@ if __name__ == "__main__":
     <body>
     <h1> {sim} overview </h1>
     {report_body}
+    </body>
     """
         )
     )
@@ -448,10 +459,4 @@ if __name__ == "__main__":
         styles={"display": "block", "margin": "auto", "width": "60%"},
     )
 
-    if args.dark:
-        bkh_plt.curdoc().theme = "dark_minimal"
-    else:
-        bkh_plt.curdoc().theme = "light_minimal"
-
-    bkh_plt.save(doc, title="Simmonitor")
     logger.debug("DONE")
