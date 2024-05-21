@@ -1,9 +1,6 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # TODO:
-# Downgrade python requirements
 # Add radius tabs
-# Add a simulation reporting option
-# Diagnose why certain simulations aren't working
 import numpy as np
 import logging
 import re
