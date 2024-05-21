@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 import logging
+import configparser
 import matplotlib.pyplot as plt
 import re
 import os
@@ -52,26 +53,55 @@ def getTerminationReason(logfile):
                 line,
             ):
                 return "TrackTriggers"
+            if re.search(r"[(]Carpet[)]: Terminating due to cctk_final_time at t =", line):
+                return "FinalTime"
     return "unknown"
 
+def getFailureReason(errfile):
+    with open(errfile, "r") as fh:
+        for line in fh.readlines():
+            if re.search(r"slurmstepd: error: [*][*][*] JOB .* CANCELLED AT .* DUE TO TIME LIMIT", line):
+                return "walltime exceeded"
+            if re.search(r"Could not open simulation log file.*Permission denied", line):
+                return "cannot write log file: copied run?"
+            if re.search(r"CCTKi_SetParameter: Error at line", line):
+                return "Parameter file error"
+            if re.search(r"WARNING level 0", line):
+                return "CCTK_ERROR called"
+            if re.search(r"tasks .*: Exited with exit code [1-9]", line):
+                return "Cactus failed" # TODO: parse Cactus error message
+    propfile = f"{os.path.dirname(errfile)}/SIMFACTORY/properties.ini"
+    properties = configparser.ConfigParser()
+    if not properties.read(propfile):
+        logger.debug("Error reading .par file: {propfile}")
+
+    if not "jobid" in properties["properties"]:
+        return "jobid missing: next segment will fail"
+
+    return False
 
 def populate_logs(sim):
     logger.debug("Populating Logs")
-    sim_logs = sim.logfiles
-    sim_logs.sort()
     logs = []
-    for sim_log in sim_logs:
-        sim_num = re.search(r"output-(\d\d\d\d)", sim_log).group(1)
-        logs.append(
-            [
-                f'{sim_num}{"(active)" if ("active" in sim_log) else "" }',
+    for sim_log in sorted(sim.logfiles):
+        segment_number = re.search(r"output-(\d\d\d\d)", sim_log).group(1)
+        err_file, _ = os.path.splitext(sim_log)
+        err_file = f"{err_file}.err"
+        log_row = [
+                f'{segment_number}{"(active)" if ("active" in sim_log) else "" }',
                 getTerminationReason(sim_log),
                 os.path.abspath(sim_log),
             ]
-        )
-    logs = [f"<tr><td><a href='{log[2]}'>{log[0]}</a></td><td>{log[1]}</td></tr>" for log in logs]
-    logs = ["<tr><th>Simulation Run</th><th>Termination Reason</th></tr>"] + logs
-
+        if os.path.exists(err_file):
+            failure = getFailureReason(err_file)
+            if failure == False:
+                log_row.append("")
+                log_row = f"<tr><td><a href='{log_row[2]}'>{log_row[0]}</a></td><td>{log_row[1]}</td><td>{log_row[3]}</td></tr>"
+            else:
+                log_row.append(f"<a href='{err_file}'>{failure}</a>")
+                log_row = f"<span style='background-color:red'><tr><td><a href='{log_row[2]}'>{log_row[0]}</a></td><td>{log_row[1]}</td><td>{log_row[3]}</td></tr></span>"
+        logs.append(log_row)
+    logs = ["<tr><th>Simulation Run</th><th>Termination Reason</th><th>Error</th></tr>"] + logs
     return logs
 
 def populate_graphs(sim, args):
