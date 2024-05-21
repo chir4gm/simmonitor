@@ -73,7 +73,6 @@ def populate_graphs(sim, args):
     logger.debug(f"Radii available: {reader.radii}")
 
     plotly_html = []
-    static_html = []
     sim_radii = None
     if args.radius:
         logger.debug(f"Plotting radii: {args.radius}")
@@ -341,11 +340,11 @@ def populate_graphs(sim, args):
     fig_html = pio.to_html(fig,include_mathjax=False,include_plotlyjs=False, full_html=False, auto_play=False)
     plotly_html.append(fig_html)
     logger.debug("Plotted")
-    return plotly_html,static_html
+    return plotly_html
 
 
 if __name__ == "__main__":
-    desc = f"""{kah.get_program_name()} generates a reports for Einstein Toolkit Simulation. It can generate static versions using Matplotlib and HTML, or an interactive version with Plotly.js"""
+    desc = f"""{kah.get_program_name()} generates a report for Einstein Toolkit Simulation. It can generate an interactive version with Plotly.js"""
 
     parser = kah.init_argparse(desc)
 
@@ -392,13 +391,13 @@ if __name__ == "__main__":
             quit() 
 
         logs = populate_logs(sim)
-        plotly_html, static_html =  populate_graphs(sim, args)
+        plotly_html =  populate_graphs(sim, args)
 
         logger.debug("Generating Interactive HTML")
         template_html = ""
         with open('template.jinja') as template:
             template = Template(template.read())
-            template_html = template.render(plotly_html=plotly_html)
+            template_html = template.render(plotly_html=plotly_html, logs=logs, simulation=os.path.basename(args.datadir))
         with open(args.output, 'w') as output:
             output.write(template_html)
     logger.debug("DONE")

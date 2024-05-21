@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <title>{{simulation}}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multiple Plotly Figures</title>
     <!-- Include Plotly JS -->
@@ -13,7 +14,12 @@
 </head>
 
 <body>
-    <h1>Simmonitor</h1>
+    <h1>{{simulation}}</h1>
+
+    <table>
+        {{''.join(logs)}}
+    </table>
+    
     {% for fig in plotly_html %}
         <div id="plot-container">
             {{ fig | safe }}

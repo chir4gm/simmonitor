@@ -79,7 +79,6 @@ def populate_graphs(sim, args):
     reader = sim.gravitationalwaves
     logger.debug(f"Radii available: {reader.radii}")
 
-    plotly_html = []
     static_html = []
     sim_radii = None
     if args.radius:
@@ -175,7 +174,6 @@ def populate_graphs(sim, args):
             ah_coords[to_plot_y][ind].y,
             label=f"Horizon {ah}",
         )
-        logger.debug(len(ah_coords[to_plot_x][ind].y))
         # We save the time to plot the horizon outline
         time = ah_coords[to_plot_x][ind].tmax
 
@@ -236,11 +234,11 @@ def populate_graphs(sim, args):
     static_html.append(gen_fig("sim_speed"))
     plt.clf()
     logger.debug("Plotted")
-    return plotly_html,static_html
+    return static_html
 
 
 if __name__ == "__main__":
-    desc = f"""{kah.get_program_name()} generates a reports for Einstein Toolkit Simulation. It can generate static versions using Matplotlib and HTML"""
+    desc = f"""{kah.get_program_name()} generates a report for Einstein Toolkit Simulation. It can generate static versions using Matplotlib and HTML"""
 
     parser = kah.init_argparse(desc)
 
@@ -284,20 +282,20 @@ if __name__ == "__main__":
             quit() 
 
         logs = populate_logs(sim)
-        plotly_html, static_html =  populate_graphs(sim, args)
+        static_html =  populate_graphs(sim, args)
 
         logger.debug("Generating Static HTML")
         report_file = open(f"{args.outdir}/index.html", "w")
-        sim = os.path.normpath(args.datadir)
+        simulation = os.path.basename(args.datadir)
         report_file.write(
             textwrap.dedent(
         f"""
         <html>
         <head>
-            <title> {sim} overview</title>
+            <title> {simulation} overview</title>
         </head>
         <body>
-        <h1> {sim} overview </h1>
+        <h1> {simulation} overview </h1>
         <table>
         {''.join(logs)}
         </table>
