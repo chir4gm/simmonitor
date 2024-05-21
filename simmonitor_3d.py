@@ -85,13 +85,13 @@ def populate_graphs(sim, args):
     for radius in sim_radii:
         detector = reader[radius]
 
-        psi4 = detector[args.l, args.m]
+        psi4 = detector[args.el, args.em]
         logger.debug(f"Plotting Psi4 radius={radius}")
 
         fig = go.Figure()
         time = psi4.t
-        fig.add_trace(go.Scatter(x=time, y=radius * (psi4.real().y), mode='lines', name=rf"$r\Re\Psi_4^{{{args.l}{args.m}}}$"))
-        fig.add_trace(go.Scatter(x=time, y=radius * (psi4.abs().y), mode='lines', name=rf"$r|\Psi_4^{{{args.l}{args.m}}}|$"))
+        fig.add_trace(go.Scatter(x=time, y=radius * (psi4.real().y), mode='lines', name=rf"$r\Re\Psi_4^{{{args.el}{args.em}}}$"))
+        fig.add_trace(go.Scatter(x=time, y=radius * (psi4.abs().y), mode='lines', name=rf"$r|\Psi_4^{{{args.el}{args.em}}}|$"))
         fig.update_layout(
         template=pio.templates.default,
         title=rf"$\Psi_4 r={radius}$",
@@ -350,8 +350,8 @@ if __name__ == "__main__":
     parser = kah.init_argparse(desc)
 
     parser.add_argument("--theme", type=str, default="plotly", choices=list(pio.templates.keys()), help=f"Choose a theme from:{list(pio.templates.keys())}")
-    parser.add_argument("--l", "-l", type=int)
-    parser.add_argument("--m", "-m", type=int)
+    parser.add_argument("--el", "-el", type=int)
+    parser.add_argument("--em", "-em", type=int)
     parser.add_argument("--output", "-o", type=str)
     parser.add_argument("--radius", "-r", type=float, action="append")
     parser.add_argument("--info", "-i", action="store_true", help="Retrieve Kuibit simulation metadata")
