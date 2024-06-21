@@ -20,5 +20,5 @@ Create static report in `./output`
 ```
 ### 3D
 ```sh
-./simmonitor_2d.py -c simmonitor_3d.cfg --datadir [simulation directory] --output [output file] -v
+./simmonitor_3d.py -c simmonitor_3d.cfg --datadir [simulation directory] --output [output file] -v
 ```
